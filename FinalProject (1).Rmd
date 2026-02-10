@@ -1,0 +1,278 @@
+---
+title: "Final Project"
+author: "Alex Coelho, Joel Nithish Kumar Murugan, Kumaresh Pendiyala Venkatesh"
+date: "2023-11-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,comment = '', fig.width = 6, fig.height = 6
+  )
+```
+
+**Importing Packages**
+
+```{r}
+library(ggplot2)
+library(tigerstats)
+library(tidyverse)
+library(MLmetrics)
+library(MASS)
+```
+
+## Data Cleaning and Preparation
+
+**Importing Data Set**
+
+```{r}
+Covid <- read.csv("country_wise_latest.csv", sep=",")
+head(Covid)
+summary(Covid)
+```
+
+**Checking Data Types**
+
+```{r}
+str(Covid)
+```
+**Checking Observations**
+
+```{r}
+dim(Covid)
+```
+
+**Checking for Missing Values**
+
+```{r}
+sum(is.na(Covid))
+```
+
+**Checking for Duplicate Values**
+
+```{r}
+sum(Covid[duplicated(Covid), ])
+```
+
+**Standardizing Data**
+
+```{r}
+sum(is.infinite(Covid$Deaths...100.Recovered))
+
+Covid <- Covid[is.finite(Covid$`Deaths...100.Recovered`), ]
+
+sum(is.infinite(Covid$Deaths...100.Recovered))
+```
+
+```{r}
+Covid <- Covid[, c(2:14,1,15)]
+
+str(Covid)
+```
+
+## Exploratory Data Analysis
+
+**Histogram**
+
+```{r}
+ggplot(data = Covid, aes(x = X1.week...increase )) +
+  geom_histogram(binwidth = 10, fill = "skyblue", color = "black") +
+  labs(title = "Histogram of Percentage of Cases Increased Per Week", x = "Percentage of Cases Increased Per Week", y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+**Boxplot**
+
+```{r}
+Covid_a <- scale(Covid$New.deaths)
+Covid_outliers <- Covid[Covid_a>3,]
+
+Covid_outliers
+```
+
+```{r}
+ggplot(data = Covid_outliers, aes(x = 1, y = New.deaths)) +
+  geom_boxplot(fill = "pink", color = "black") +
+  labs(title = "Boxplot of New Deaths (Outliers)", x = "", y = "New Deaths") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+**Overlay Boxplot**
+
+```{r}
+Covid_segment <- Covid[Covid$Active > 10000 & Covid$Active < 150000, ]
+
+ggplot(data = Covid_segment, aes(x = reorder(WHO.Region, Active), y = Active)) +
+  geom_boxplot(fill = "lightgreen", color = "black") +
+  labs(
+    title = "Boxplot of Active Cases by WHO Region",
+    x = "WHO Region",
+    y = "Active Cases"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+**Overlay Histogram**
+
+```{r}
+
+ggplot(data = Covid, aes(x = Recovered...100.Cases )) +
+  geom_histogram(binwidth = 10, aes(fill = WHO.Region), color = "black", position = "fill") +
+  labs(
+    x = "Recovered Per 100 Cases ",
+    y = "Frequency",
+    fill = "WHO Region",
+    title = "Distribution of Recovery Per 100 cases by WHO Region"
+  ) +
+  theme_minimal() +
+  scale_fill_brewer(palette = "Set3") +
+  theme(axis.text.x = element_text( hjust = 1,), plot.title = element_text(hjust = 0.5))
+```
+
+## Hypotheses
+
+```{r}
+Covid_Asia <- Covid$Recovered...100.Cases[Covid$WHO.Region == "South-East Asia"]
+
+Covid_Europe <- Covid$Recovered...100.Cases[Covid$WHO.Region == "Europe"]
+```
+
+
+Parameter:
+<br>
+$\sigma^2_{CA} =$ Variance of the Recovered Per 100 Cases in Asia.
+
+$\sigma^2_{CE} =$ Variance of the Recovered Per 100 Cases in Europe.
+
+Hypotheses:
+
+\begin{align*}
+H_0:\sigma^2_{CA}/\sigma^2_{CE} & = 1, \\
+H_1:\sigma^2_{CA}/\sigma^2_{CE} & \ne 1,
+\end{align*}
+
+
+**Variance Test**
+
+```{r}
+var.test(Covid_Asia, Covid_Europe)
+```
+
+
+Parameter:
+<br>
+$\mu_{CA} =$ mean of the Recovered Per 100 Cases in Asia.
+
+$\mu_{CE} =$ mean of the Recovered Per 100 Cases in Europe.
+
+Hypotheses:
+
+\begin{align*}
+H_0: \mu_{CA}  = \mu_{CE} ,\\
+H_1: \mu_{CA} \ne \mu_{CE}.
+\end{align*}
+
+**Hypotheses Test**
+
+```{r}
+t.test(Covid_Asia, Covid_Europe, var.equal = TRUE)
+```
+
+## Linear Regression
+
+```{r}
+i <- sample(2, nrow(Covid), replace = TRUE, prob = c(0.8, 0.2))
+CovidTraining <- Covid[i == 1, ]
+CovidTest <- Covid[i == 2, ]
+summary(CovidTraining)
+summary(CovidTest)
+```
+
+```{r}
+model_1 <- lm(New.deaths ~ Active , data = CovidTraining[, 1:13])
+summary(model_1)
+```
+
+```{r}
+intercept_only <- lm(New.deaths  ~ 1, data=CovidTraining[, 1:13])
+
+all <- lm(New.deaths ~. , data = CovidTraining[, 1:13])
+
+model_2 <- stepAIC (intercept_only, direction='forward',scope = formula(all))
+```
+
+```{r}
+summary(model_2)
+```
+
+
+```{r}
+model_3 <- stepAIC (all, direction='backward')
+```
+
+```{r}
+summary(model_3)
+```
+
+
+```{r}
+{
+plot(CovidTraining$New.deaths,fitted(model_1),xlab = "Number of Active Covid Cases", ylab = "Number of New Deaths", main = "Simple Linear regression model")
+  
+abline(0, 1, col = "red")
+
+plot(CovidTraining$New.deaths,fitted(model_2),xlab = "Actual New Deaths", ylab = "Fitted New Deaths", main = "Forward stepwise regression model")
+  
+abline(0, 1, col = "red")
+
+plot(CovidTraining$New.deaths,fitted(model_3),xlab = "Actual New Deaths", ylab = "Fitted New Deaths", main = "Backward stepwise regression model")
+  
+abline(0, 1, col = "red")
+}
+```
+
+
+```{r}
+
+aic_values <- c(
+  AIC(model_1),
+  AIC(model_2),
+  AIC(model_3)
+)
+
+adjusted_r_squared <- c(
+  summary(model_1)$adj.r.squared,
+  summary(model_2)$adj.r.squared,
+  summary(model_3)$adj.r.squared
+)
+
+predictions_model_1 <- predict(model_1, newdata = CovidTest)
+predictions_model_2 <- predict(model_2, newdata = CovidTest)
+predictions_model_3 <- predict(model_3, newdata = CovidTest)
+
+mae_values <- c(
+  MAE(y_pred = predictions_model_1, y_true = CovidTest$New.deaths),
+  MAE(y_pred = predictions_model_2, y_true = CovidTest$New.deaths),
+  MAE(y_pred = predictions_model_3, y_true = CovidTest$New.deaths)
+)
+
+mse_values <- c(
+  MSE(y_pred = predictions_model_1, y_true = CovidTest$New.deaths),
+  MSE(y_pred = predictions_model_2, y_true = CovidTest$New.deaths),
+  MSE(y_pred = predictions_model_3, y_true = CovidTest$New.deaths)
+)
+
+evaluation_table <- data.frame(
+  Model = c("Simple Linear Regression", "Forward Stepwise", "Backward Stepwise"),
+  AIC = aic_values,
+  Adjusted_R_Squared = adjusted_r_squared,
+  MAE = mae_values,
+  MSE = mse_values
+)
+evaluation_table
+```
+
